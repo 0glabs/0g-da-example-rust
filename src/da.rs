@@ -151,6 +151,8 @@ impl ZGDA {
                 adversary_threshold: self.config.adversary_threshold,
                 quorum_threshold: self.config.quorum_threshold,
             }],
+            // TODO: Make this a parameter.
+            target_chunk_num: 32,
         }
     }
 

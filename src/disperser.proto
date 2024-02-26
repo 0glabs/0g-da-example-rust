@@ -35,6 +35,9 @@ message DisperseBlobRequest {
 	// The disperser will ensure that the encoded blobs for each quorum are all processed
 	// within the same batch.
 	repeated SecurityParams security_params = 2;
+	// The number of chunks that encoded blob split into.
+	// The number will be aligned to the next power of 2 and be bounded by blob size.
+	uint32 targetChunkNum = 3;
 }
 
 message DisperseBlobReply {
@@ -79,7 +82,7 @@ message RetrieveBlobReply {
 // SecurityParams contains the security parameters for a given quorum.
 message SecurityParams {
 	// The ID of the quorum.
-	// The quorum must be already registered on ZGLayer. The ID must be
+	// The quorum must be already registered on EigenLayer. The ID must be
 	// in range [0, 255].
 	uint32 quorum_id = 1;
 	// The max percentage of stake within the quorum that can be held by or delegated
