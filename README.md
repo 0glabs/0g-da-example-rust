@@ -1,6 +1,6 @@
-# ZGDA rust client and test harness
+# 0G DA rust client and test harness
 
-Generates workload tests for ZeroG DA.
+Generates workload tests for 0G DA.
 
 
 ## Compilation
@@ -14,7 +14,7 @@ cargo run -- --help
 ## --- Quick test-----
 cargo run -- zerog-da-disperse
 
-Run 3MB dispersals on ZGDA. Each request to ZGDA is limited to a 512K chunk.
+Run 3MB dispersals on 0G DA. Each request to 0G DA is limited to a 512K chunk.
 Requests are rate limited to 6 requests per second and 6 max outstanding requests per second.
 
 ## TODO:
