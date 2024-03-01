@@ -1,0 +1,88 @@
+dispersing blob 1015808 bytes
+Took 2.702291208s
+dispersing blob 1015808 bytes
+Took 2.712241833s
+dispersing blob 1015808 bytes
+Took 2.798869458s
+dispersing blob 1015808 bytes
+Took 2.736236583s
+dispersing blob 1015808 bytes
+Took 2.742858959s
+dispersing blob 1015808 bytes
+Took 2.802209042s
+dispersing blob 1015808 bytes
+Took 2.718587417s
+dispersing blob 1015808 bytes
+Took 2.733217916s
+dispersing blob 1015808 bytes
+Took 2.775839542s
+dispersing blob 1015808 bytes
+Took 2.714045458s
+dispersing blob 1015808 bytes
+Took 2.767616875s
+dispersing blob 1015808 bytes
+Took 2.582616542s
+dispersing blob 1015808 bytes
+Took 2.659304958s
+dispersing blob 1015808 bytes
+Took 2.750552709s
+dispersing blob 1015808 bytes
+Took 2.648517125s
+dispersing blob 1015808 bytes
+Took 2.776203875s
+dispersing blob 1015808 bytes
+Took 2.682091542s
+dispersing blob 1015808 bytes
+Took 3.108538375s
+dispersing blob 1015808 bytes
+Took 2.751761167s
+dispersing blob 1015808 bytes
+Took 2.695631917s
+dispersing blob 1015808 bytes
+Took 2.686681167s
+dispersing blob 1015808 bytes
+Took 2.736406542s
+dispersing blob 1015808 bytes
+Took 2.723312958s
+dispersing blob 1015808 bytes
+Took 2.712963917s
+dispersing blob 1015808 bytes
+Took 2.7079785s
+dispersing blob 1015808 bytes
+Took 2.710341167s
+dispersing blob 1015808 bytes
+Took 2.661596709s
+dispersing blob 1015808 bytes
+Took 2.726161959s
+dispersing blob 1015808 bytes
+Took 3.348569833s
+dispersing blob 1015808 bytes
+Took 2.658291834s
+dispersing blob 1015808 bytes
+Took 2.748887917s
+dispersing blob 1015808 bytes
+Took 2.783221084s
+dispersing blob 1015808 bytes
+Took 2.636876125s
+dispersing blob 1015808 bytes
+Took 2.718359792s
+dispersing blob 1015808 bytes
+Took 2.722098375s
+dispersing blob 1015808 bytes
+Took 2.723022958s
+dispersing blob 1015808 bytes
+Took 2.750608291s
+dispersing blob 1015808 bytes
+Took 2.658820667s
+dispersing blob 1015808 bytes
+Took 2.694473958s
+dispersing blob 1015808 bytes
+Took 2.785355084s
+dispersing blob 1015808 bytes
+Took 2.729074959s
+dispersing blob 1015808 bytes
+Took 3.387137625s
+dispersing blob 1015808 bytes
+Took 2.885824084s
+dispersing blob 1015808 bytes
+Took 2.704829416s

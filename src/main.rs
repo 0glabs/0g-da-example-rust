@@ -41,7 +41,7 @@ enum Command {
 }
 
 async fn zgdadisperse(da: &ZGDA, data: &[u8]) {
-    println!("dispersing blob");
+    println!("dispersing blob {} bytes", data.len());
     let _id = da.disperse_blob(&data).await.expect("request ids");
 }
 

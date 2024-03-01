@@ -57,11 +57,10 @@ pub struct ZGDA {
 
 #[derive(clap::Parser, Debug, Clone)]
 pub struct ZGDAConfig {
-    // TODO: replace with our own url
     #[arg(
         long,
         env = "DA_URL",
-        default_value_t = String::from("https://disperser-goerli.eigenda.xyz:443")
+        default_value_t = String::from("http://0.0.0.0:51001")
     )]
     url: String,
 
@@ -76,10 +75,10 @@ pub struct ZGDAConfig {
     #[arg(long, default_value_t = 50)]
     quorum_threshold: u32,
 
-    #[arg(long, default_value_t = 3_145_728)]
+    #[arg(long, default_value_t = 507904)]
     pub block_size: usize,
 
-    #[arg(long, default_value_t = 524288)]
+    #[arg(long, default_value_t = 507904)]
     pub chunk_size: usize,
 
     #[arg(
@@ -97,21 +96,30 @@ pub struct ZGDAConfig {
         help = "max outstanding requests to ZGDA"
     )]
     max_out_standing: u8,
+
+    #[arg(
+        long,
+        global = true,
+        default_value_t = 32,
+        help = "target chunk number"
+    )]
+    target_chunk_num: u8,
 }
 
 impl Default for ZGDAConfig {
     // TODO: replace with our own url
     fn default() -> Self {
         Self {
-            url: "https://disperser-goerli.eigenda.xyz:443".to_string(),
+            url: "http://0.0.0.0:51001".to_string(),
             disperser_retry_delay_ms: 1000,
             status_retry_delay_ms: 2000,
             adversary_threshold: 25,
             quorum_threshold: 50,
             block_size: 12_582_912,
-            chunk_size: 256,
-            rps: 6,
+            chunk_size: 512 * 31 / 32,
+            rps: 12,
             max_out_standing: 6,
+            target_chunk_num: 32,
         }
     }
 }
@@ -151,8 +159,7 @@ impl ZGDA {
                 adversary_threshold: self.config.adversary_threshold,
                 quorum_threshold: self.config.quorum_threshold,
             }],
-            // TODO: Make this a parameter.
-            target_chunk_num: 32,
+            target_chunk_num: self.config.target_chunk_num as u32,
         }
     }
 
@@ -360,7 +367,7 @@ mod test {
             data.push(i as u8)
         }
         let responses = da
-            .store_blob(CHUNK_SIZE, &data)
+            .store_blob(&data)
             .await
             .expect("availability proofs");
         let data = da.retrieve_blob(responses).await.expect("retrieved data");
