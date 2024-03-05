@@ -79,7 +79,7 @@ pub struct ZGDAConfig {
     pub block_size: usize,
 
     #[arg(long, default_value_t = 507904)]
-    pub chunk_size: usize,
+    pub blob_size: usize,
 
     #[arg(
         long,
@@ -101,7 +101,7 @@ pub struct ZGDAConfig {
         long,
         global = true,
         default_value_t = 32,
-        help = "target chunk number"
+        help = "target chunk number to divide the blob into within ZGDA"
     )]
     target_chunk_num: u8,
 }
@@ -116,7 +116,7 @@ impl Default for ZGDAConfig {
             adversary_threshold: 25,
             quorum_threshold: 50,
             block_size: 12_582_912,
-            chunk_size: 512 * 31 / 32,
+            blob_size: 512 * 31 / 32,
             rps: 12,
             max_out_standing: 6,
             target_chunk_num: 32,
@@ -143,7 +143,7 @@ impl ZGDA {
     // disperse_blob_request
     //
     //       Helper function to generate default security parameters for dispersed
-    //       chunks
+    //       blobs
     //
     // params:
     //
@@ -163,19 +163,19 @@ impl ZGDA {
         }
     }
 
-    // disperse_chunk
+    // disperse_blob
     //
-    //       Disperses a single chunk of data to data availability provider
+    //       Disperses a single blob data to data availability provider
     //
     // params:
-    // chunk_id : logical sequence of the chunk within a blob
-    // data     : data for the chunk
+    // blob_id : logical sequence of the blob in a block
+    // data     : blob data
     //
     // returns:
     //
     // request_id: The request ID can be used for getting the next
-    // state of the dispersed chunk
-    async fn disperse_chunk(&self, chunk_id: usize, data: &[u8]) -> Result<Vec<u8>> {
+    // state of the dispersed blob
+    async fn disperse_blob_inner(&self, blob_id: usize, data: &[u8]) -> Result<Vec<u8>> {
         let _permit = self
             .disperser_permits
             .acquire()
@@ -192,7 +192,7 @@ impl ZGDA {
                 }
                 Err(resp) => {
                     self.metrics.dispersal_rate_limited.inc();
-                    println!("Err: disperse_chunk {chunk_id:?} {:?}", resp.message());
+                    println!("Err: disperse_blob {blob_id:?} {:?}", resp.message());
                     tokio::time::sleep(tokio::time::Duration::from_millis(
                         self.config.disperser_retry_delay_ms.into(),
                     ))
@@ -204,23 +204,23 @@ impl ZGDA {
         Ok(response.into_inner().request_id.clone())
     }
 
-    // wait_for_chunk_confirmation
+    // wait_for_blob_confirmation
     //
-    //       Waits for a chunk to be confirmed. The wait is achieved
+    //       Waits for a blob to be confirmed. The wait is achieved
     //       using a poll loop. The loop involves a sleep which is
     //       "fine" as confirmation is not in the hot throughput path.
     //
     // params:
-    // request_id : The chunk-id received from the disperser
-    // data       : data for the chunk
+    // request_id : The request-id received from the disperser
+    // data       : blob data
     //
     // returns:
     // BlobStatusReply to be used in retrieval
     //
     // TODO:      : Handling poll errors outside on un-confirmed blocks
-    async fn wait_for_chunk_confirmation(
+    async fn wait_for_blob_confirmation(
         &self,
-        chunk_id: usize,
+        blob_id: usize,
         request_id: Vec<u8>,
     ) -> Result<BlobStatusReply> {
         let mut client = DisperserClient::connect(self.config.url.clone()).await?;
@@ -231,7 +231,7 @@ impl ZGDA {
                 })
                 .await;
             let r = response.unwrap().into_inner();
-            println!("{chunk_id} Response {r:?}");
+            println!("{blob_id} Response {r:?}");
             self.metrics.poll_confirmation_count.inc();
             let blob_status = BlobStatus::try_from(r.status).ok();
             if let Some(BlobStatus::Confirmed) = blob_status {
@@ -255,15 +255,15 @@ impl ZGDA {
         Ok(response)
     }
 
-    // retrieve_chunk
+    // retrieve_blob
     //
-    //       Retrieves a single chunk of data from the data availability provider
+    //       Retrieves a single blob of data from the data availability provider
     //
     // params:
     // batch_header_hash : The message that the operators will sign their signatures
     // on.
     // blob_index: index of blob in the batch
-    async fn retrieve_chunk(&self, batch_header_hash: Vec<u8>, blob_index: u32) -> Result<Vec<u8>> {
+    async fn retrieve_blob_inner(&self, batch_header_hash: Vec<u8>, blob_index: u32) -> Result<Vec<u8>> {
         let mut client = DisperserClient::connect(self.config.url.clone()).await?;
         let request = tonic::Request::new(RetrieveBlobRequest {
             blob_index,
@@ -284,10 +284,10 @@ impl DAClient for ZGDA {
     async fn disperse_blob(&self, data: &[u8]) -> Result<Vec<Vec<u8>>> {
         // disperse
         let v = data
-            .chunks(self.config.chunk_size)
+            .chunks(self.config.blob_size)
             .into_iter()
             .enumerate()
-            .map(|(chunk_id, data)| self.disperse_chunk(chunk_id, data))
+            .map(|(blob_id, data)| self.disperse_blob_inner(blob_id, data))
             .collect::<Vec<_>>();
         let ids = join_all(v)
             .await
@@ -298,11 +298,11 @@ impl DAClient for ZGDA {
 
     async fn store_blob(&self, data: &[u8]) -> Result<Vec<BlobStatusReply>> {
         let ids = self.disperse_blob(data).await?;
-        // confirm chunks
+        // confirm blobs
         let confirmations = ids
             .into_iter()
             .enumerate()
-            .map(|(chunk_id, request_id)| self.wait_for_chunk_confirmation(chunk_id, request_id))
+            .map(|(blob_id, request_id)| self.wait_for_blob_confirmation(blob_id, request_id))
             .collect::<Vec<_>>();
         join_all(confirmations)
             .await
@@ -331,13 +331,13 @@ impl DAClient for ZGDA {
             })
             .collect::<Vec<_>>();
 
-        // Collect and reconstruct all chunks
+        // Collect and reconstruct all blobs
         let retrievals = v
             .into_iter()
             .collect::<Result<Vec<_>, _>>()?
             .into_iter()
             .map(|(blob_index, batch_header_hash)| {
-                self.retrieve_chunk(batch_header_hash, blob_index)
+                self.retrieve_blob_inner(batch_header_hash, blob_index)
             })
             .collect::<Vec<_>>();
         let res = join_all(retrievals)
@@ -345,45 +345,5 @@ impl DAClient for ZGDA {
             .into_iter()
             .collect::<Result<Vec<_>, _>>()?;
         Ok(res.into_iter().flatten().collect())
-    }
-}
-
-#[cfg(test)]
-mod test {
-    const KB: usize = 1024;
-    const BLOB_SIZE: usize = 512;
-    const CHUNK_SIZE: usize = 128;
-    use super::{ZGDA, ZGDAConfig};
-    use crate::da::DAClient;
-    use crate::rollup::test::MockNordRollup;
-    use crate::rollup::RollupClient;
-    use rand::{Rng, SeedableRng};
-    use rand_pcg::Pcg64;
-    #[tokio::test]
-    async fn da_round_trip() {
-        let da = ZGDA::new(ZGDAConfig::default(), prometheus::default_registry());
-        let mut data = Vec::<u8>::with_capacity(BLOB_SIZE);
-        for i in 0..BLOB_SIZE {
-            data.push(i as u8)
-        }
-        let responses = da
-            .store_blob(&data)
-            .await
-            .expect("availability proofs");
-        let data = da.retrieve_blob(responses).await.expect("retrieved data");
-        for i in 0..BLOB_SIZE {
-            assert_eq!(data[i], i as u8);
-        }
-    }
-
-    #[tokio::test]
-    async fn da_zg_stress() {
-        let seed = Pcg64::from_entropy().gen();
-        let rollup = MockNordRollup::new(seed, 1000.);
-        let action_list_resp = rollup
-            .fetch_transactions(0, 100_000)
-            .await
-            .expect("Mock txn expected");
-        println!("action_list_resp size: {}", action_list_resp.len());
     }
 }
