@@ -100,10 +100,10 @@ pub struct ZGDAConfig {
     #[arg(
         long,
         global = true,
-        default_value_t = 32,
-        help = "target chunk number to divide the blob into within ZGDA"
+        default_value_t = 1024,
+        help = "target row number to divide the blob into within ZGDA"
     )]
-    target_chunk_num: u32,
+    target_row_num: u32,
 }
 
 impl Default for ZGDAConfig {
@@ -119,7 +119,7 @@ impl Default for ZGDAConfig {
             blob_size: 256,
             rps: 6,
             max_out_standing: 6,
-            target_chunk_num: 32,
+            target_row_num: 32,
         }
     }
 }
@@ -159,7 +159,7 @@ impl ZGDA {
                 adversary_threshold: self.config.adversary_threshold,
                 quorum_threshold: self.config.quorum_threshold,
             }],
-            target_chunk_num: self.config.target_chunk_num as u32,
+            target_row_num: self.config.target_row_num as u32,
         }
     }
 
@@ -263,7 +263,11 @@ impl ZGDA {
     // batch_header_hash : The message that the operators will sign their signatures
     // on.
     // blob_index: index of blob in the batch
-    async fn retrieve_blob_inner(&self, batch_header_hash: Vec<u8>, blob_index: u32) -> Result<Vec<u8>> {
+    async fn retrieve_blob_inner(
+        &self,
+        batch_header_hash: Vec<u8>,
+        blob_index: u32,
+    ) -> Result<Vec<u8>> {
         let mut client = DisperserClient::connect(self.config.url.clone()).await?;
         let request = tonic::Request::new(RetrieveBlobRequest {
             blob_index,

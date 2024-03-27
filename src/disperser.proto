@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-option go_package = "github.com/zero-gravity-labs/zerog-data-avail/api/grpc/disperser";
+option go_package = "github.com/0glabs/0g-data-avail/api/grpc/disperser";
 package disperser;
 
 // Disperser defines the public APIs for dispersing blobs.
@@ -35,9 +35,9 @@ message DisperseBlobRequest {
 	// The disperser will ensure that the encoded blobs for each quorum are all processed
 	// within the same batch.
 	repeated SecurityParams security_params = 2;
-	// The number of chunks that encoded blob split into.
+	// The number of rows that encoded blob split into.
 	// The number will be aligned to the next power of 2 and be bounded by blob size.
-	uint32 targetChunkNum = 3;
+	uint32 target_row_num = 3;
 }
 
 message DisperseBlobReply {
@@ -106,7 +106,7 @@ message SecurityParams {
 	// Note: The adversary_threshold and quorum_threshold will directly influence the
 	// cost of encoding for the blob to be dispersed, roughly by a factor of
 	// 100 / (quorum_threshold - adversary_threshold). See the spec for more details:
-	// https://github.com/zero-gravity-labs/zerog-data-avail/blob/master/docs/spec/protocol-modules/storage/overview.md
+	// https://github.com/0glabs/0g-data-avail/blob/master/docs/spec/protocol-modules/storage/overview.md
 	// Currently it's required that the difference must be at least 10.
 	uint32 quorum_threshold = 3;
 }
@@ -135,7 +135,7 @@ enum BlobStatus {
 }
 
 // Types below correspond to the types necessary to verify a blob
-// https://github.com/zero-gravity-labs/zerog-data-avail/blob/master/contracts/src/libraries/ZGDABlobUtils.sol#L29
+// https://github.com/0glabs/0g-data-avail/blob/master/contracts/src/libraries/ZGDABlobUtils.sol#L29
 
 // BlobInfo contains information needed to confirm the blob against the ZGDA contracts
 message BlobInfo {
@@ -144,8 +144,8 @@ message BlobInfo {
 }
 
 message BlobHeader {
-	// KZG commitment to the blob.
-	bytes commitment = 1;
+	// Merkle root of KZG commitments of blob. 
+	bytes commitment_root = 1;
 	// The length of the blob in symbols (each symbol is 31 bytes).
 	uint32 data_length = 2;
 	// The params of the quorums that this blob participates in.
@@ -201,7 +201,7 @@ message BatchMetadata {
 	// The Ethereum block number at which the batch is confirmed onchain.
 	uint32 confirmation_block_number = 4;
 	// This is the hash of the ReducedBatchHeader defined onchain, see:
-	// https://github.com/zero-gravity-labs/zerog-data-avail/blob/master/contracts/src/interfaces/IZGDAServiceManager.sol#L43
+	// https://github.com/0glabs/0g-data-avail/blob/master/contracts/src/interfaces/IZGDAServiceManager.sol#L43
 	// The is the message that the operators will sign their signatures on.
 	bytes batch_header_hash = 5;
 }

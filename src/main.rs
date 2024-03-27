@@ -1,6 +1,6 @@
 use anyhow::Result;
-use zgdatestharness::{DAClient, ZGDA, ZGDAConfig};
 use std::vec::Vec;
+use zgdatestharness::{DAClient, ZGDAConfig, ZGDA};
 
 #[derive(clap::Parser)]
 struct Cli {
