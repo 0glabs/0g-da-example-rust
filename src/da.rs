@@ -119,7 +119,7 @@ impl Default for ZGDAConfig {
             blob_size: 256,
             rps: 6,
             max_out_standing: 6,
-            target_row_num: 32,
+            target_row_num: 1024,
         }
     }
 }
