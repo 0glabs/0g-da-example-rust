@@ -1,6 +1,6 @@
 use anyhow::Result;
-use zgdatestharness::{DAClient, ZGDA, ZGDAConfig};
-use std::vec::Vec;
+use rand::Rng;
+use zgdatestharness::{DAClient, ZGDAConfig, ZGDA};
 
 #[derive(clap::Parser)]
 struct Cli {
@@ -48,9 +48,9 @@ async fn zgdadisperse(da: &ZGDA, data: &[u8]) {
 async fn zgdastore(da: &ZGDA, data: &[u8]) {
     println!("storing blob");
     let responses = da.store_blob(&data).await.expect("availability proofs");
-    let data = da.retrieve_blob(responses).await.expect("retrieved data");
+    let data_retrieved = da.retrieve_blob(responses).await.expect("retrieved data");
     for i in 0..data.len() {
-        assert_eq!(data[i], i as u8);
+        assert_eq!(data[i], data_retrieved[i]);
     }
 }
 
@@ -77,16 +77,23 @@ async fn main() -> Result<()> {
             .expect("failed to start prometheus exporter");
     });
 
-    let mut data = Vec::<u8>::with_capacity(da_config.block_size);
-    for i in 0..da_config.block_size {
-        data.push(i as u8)
-    }
+    let blob_size = da_config.block_size;
+    let mut data = vec![0; blob_size];
+    let mut rng = rand::thread_rng();
 
     let da = ZGDA::new(da_config, prometheus::default_registry());
 
     let prog_start = std::time::Instant::now();
+    let sleep_for_secs = sleep_for_secs as u64;
+    let mut blob_idx = 0;
     loop {
         let start = std::time::Instant::now();
+        println!("blob index {:?}", blob_idx);
+        for i in 0..blob_size {
+            let random_u8: u8 = rng.gen();
+            data[i] = random_u8;
+        }
+
         match cmd {
             Command::ZGDAStore(_) => zgdastore(&da, &data).await,
             Command::ZGDADisperse(_) => zgdadisperse(&da, &data).await,
@@ -100,9 +107,12 @@ async fn main() -> Result<()> {
             break ();
         }
 
-        if sleep_for_secs != 0 {
-            tokio::time::sleep(std::time::Duration::from_secs(sleep_for_secs.into())).await;
+        let t = start.elapsed().as_secs();
+        if sleep_for_secs > t {
+            tokio::time::sleep(std::time::Duration::from_secs(sleep_for_secs - t)).await;
         }
+
+        blob_idx += 1;
     }
 
     let _ = metrics_server.await;

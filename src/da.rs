@@ -8,7 +8,6 @@ use async_trait::async_trait;
 use disperser::disperser_client::DisperserClient;
 use disperser::{
     BlobStatus, BlobStatusReply, BlobStatusRequest, DisperseBlobRequest, RetrieveBlobRequest,
-    SecurityParams,
 };
 //Dispersing Borsh serialized binary data.
 //use engine::ActionId;
@@ -25,7 +24,7 @@ pub trait DAClient {
     //       Ping the data availability service
     async fn ping() -> Result<()>;
 
-    async fn disperse_blob(&self, data: &[u8]) -> Result<Vec<Vec<u8>>>;
+    async fn disperse_blob(&self, data: &[u8]) -> Result<Vec<(Vec<u8>, usize)>>;
 
     // store_blob
     //
@@ -69,12 +68,6 @@ pub struct ZGDAConfig {
     #[arg(long, default_value_t = 2000)]
     disperser_retry_delay_ms: u32,
 
-    #[arg(long, default_value_t = 25)]
-    adversary_threshold: u32,
-
-    #[arg(long, default_value_t = 50)]
-    quorum_threshold: u32,
-
     #[arg(long, default_value_t = 3_145_728)]
     pub block_size: usize,
 
@@ -96,14 +89,6 @@ pub struct ZGDAConfig {
         help = "max outstanding requests to ZGDA"
     )]
     max_out_standing: u8,
-
-    #[arg(
-        long,
-        global = true,
-        default_value_t = 32,
-        help = "target chunk number to divide the blob into within ZGDA"
-    )]
-    target_chunk_num: u32,
 }
 
 impl Default for ZGDAConfig {
@@ -113,13 +98,10 @@ impl Default for ZGDAConfig {
             url: "http://0.0.0.0:51001".to_string(),
             disperser_retry_delay_ms: 1000,
             status_retry_delay_ms: 2000,
-            adversary_threshold: 25,
-            quorum_threshold: 50,
             block_size: 12_582_912,
             blob_size: 256,
             rps: 6,
             max_out_standing: 6,
-            target_chunk_num: 32,
         }
     }
 }
@@ -154,12 +136,6 @@ impl ZGDA {
     fn disperse_blob_request(&self, data: &[u8]) -> DisperseBlobRequest {
         disperser::DisperseBlobRequest {
             data: data.to_vec(),
-            security_params: vec![SecurityParams {
-                quorum_id: 0,
-                adversary_threshold: self.config.adversary_threshold,
-                quorum_threshold: self.config.quorum_threshold,
-            }],
-            target_chunk_num: self.config.target_chunk_num as u32,
         }
     }
 
@@ -222,6 +198,7 @@ impl ZGDA {
         &self,
         blob_id: usize,
         request_id: Vec<u8>,
+        data_len: usize,
     ) -> Result<BlobStatusReply> {
         let mut client = DisperserClient::connect(self.config.url.clone()).await?;
         let response = loop {
@@ -234,7 +211,19 @@ impl ZGDA {
             println!("{blob_id} Response {r:?}");
             self.metrics.poll_confirmation_count.inc();
             let blob_status = BlobStatus::try_from(r.status).ok();
-            if let Some(BlobStatus::Confirmed) = blob_status {
+            if let Some(BlobStatus::Finalized) = blob_status {
+                println!(
+                    "storage root {:?}",
+                    hex::encode(
+                        &r.info
+                            .as_ref()
+                            .unwrap()
+                            .blob_header
+                            .as_ref()
+                            .unwrap()
+                            .storage_root
+                    )
+                );
                 break r;
             }
             tokio::time::sleep(tokio::time::Duration::from_millis(
@@ -243,14 +232,6 @@ impl ZGDA {
             .await
         };
 
-        let data_len = response.info.as_ref().map_or_else(
-            || 0,
-            |info| {
-                info.blob_header
-                    .as_ref()
-                    .map_or_else(|| 0, |header| header.data_length)
-            },
-        );
         self.metrics.confirmed_bytes.inc_by(data_len as u64);
         Ok(response)
     }
@@ -263,11 +244,17 @@ impl ZGDA {
     // batch_header_hash : The message that the operators will sign their signatures
     // on.
     // blob_index: index of blob in the batch
-    async fn retrieve_blob_inner(&self, batch_header_hash: Vec<u8>, blob_index: u32) -> Result<Vec<u8>> {
+    async fn retrieve_blob_inner(
+        &self,
+        storage_root: Vec<u8>,
+        epoch: u64,
+        quorum_id: u64,
+    ) -> Result<Vec<u8>> {
         let mut client = DisperserClient::connect(self.config.url.clone()).await?;
         let request = tonic::Request::new(RetrieveBlobRequest {
-            blob_index,
-            batch_header_hash,
+            storage_root,
+            epoch,
+            quorum_id,
         });
 
         let resp = client.retrieve_blob(request).await?;
@@ -281,19 +268,26 @@ impl DAClient for ZGDA {
         todo!();
     }
 
-    async fn disperse_blob(&self, data: &[u8]) -> Result<Vec<Vec<u8>>> {
+    async fn disperse_blob(&self, data: &[u8]) -> Result<Vec<(Vec<u8>, usize)>> {
         // disperse
+        let mut s = vec![];
         let v = data
             .chunks(self.config.blob_size)
             .into_iter()
             .enumerate()
-            .map(|(blob_id, data)| self.disperse_blob_inner(blob_id, data))
+            .map(|(blob_id, data)| {
+                s.push(data.len());
+                self.disperse_blob_inner(blob_id, data)
+            })
             .collect::<Vec<_>>();
         let ids = join_all(v)
             .await
             .into_iter()
             .collect::<Result<Vec<_>, _>>()?;
-        Ok(ids)
+        for id in ids.iter() {
+            println!("disperse blob request id {:?}", std::str::from_utf8(id));
+        }
+        Ok(ids.into_iter().zip(s.into_iter()).collect())
     }
 
     async fn store_blob(&self, data: &[u8]) -> Result<Vec<BlobStatusReply>> {
@@ -302,7 +296,9 @@ impl DAClient for ZGDA {
         let confirmations = ids
             .into_iter()
             .enumerate()
-            .map(|(blob_id, request_id)| self.wait_for_blob_confirmation(blob_id, request_id))
+            .map(|(blob_id, (request_id, data_len))| {
+                self.wait_for_blob_confirmation(blob_id, request_id, data_len)
+            })
             .collect::<Vec<_>>();
         join_all(confirmations)
             .await
@@ -317,17 +313,16 @@ impl DAClient for ZGDA {
         let v = blob_status
             .into_iter()
             .map(|reply| {
-                let proof = reply
+                let blob_header = reply
                     .info
                     .ok_or(anyhow!("None() for BlobInfo"))?
-                    .blob_verification_proof
+                    .blob_header
                     .ok_or(anyhow!("None() for Verification Proof"))?;
-                let blob_index = proof.blob_index;
-                let batch_header_hash = proof
-                    .batch_metadata
-                    .ok_or(anyhow!("None() for BatchMetadata"))?
-                    .batch_header_hash;
-                Ok::<_, anyhow::Error>((blob_index, batch_header_hash))
+                Ok::<_, anyhow::Error>((
+                    blob_header.storage_root,
+                    blob_header.epoch,
+                    blob_header.quorum_id,
+                ))
             })
             .collect::<Vec<_>>();
 
@@ -336,8 +331,8 @@ impl DAClient for ZGDA {
             .into_iter()
             .collect::<Result<Vec<_>, _>>()?
             .into_iter()
-            .map(|(blob_index, batch_header_hash)| {
-                self.retrieve_blob_inner(batch_header_hash, blob_index)
+            .map(|(storage_root, epoch, quorum_id)| {
+                self.retrieve_blob_inner(storage_root, epoch, quorum_id)
             })
             .collect::<Vec<_>>();
         let res = join_all(retrievals)
