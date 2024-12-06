@@ -4,15 +4,18 @@ Generates workload tests for 0G DA.
 
 
 ## Compilation
-
+```
 install rust and cargo
 cargo build
 cargo run -- --help
+```
 
 
 
 ## --- Quick test-----
+```
 cargo run -- zerog-da-disperse
+```
 
 Run 3MB dispersals on 0G DA. Each request to 0G DA is limited to a 512K blob size.
 Requests are rate limited to 6 requests per second and 6 max outstanding requests per second.
